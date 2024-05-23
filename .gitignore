@@ -1,0 +1,7 @@
+__pycache__/
+.venv/
+env/
+.spyproject
+**/*.ipynb_checkpoints
+
+
