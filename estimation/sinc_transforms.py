@@ -1,5 +1,12 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Apr  8 14:15:59 2024
+
+@author: Giuseppe Grossi
+"""
 import numpy as np
-import pyfftw.interfaces.numpy_fft as fft
+import scipy.fft as fft
 
 def precomp_sinc_transforms(kgrid, kkgrid, rkgrid, T, direct=True, compute_grads=False):
     #Shape of T should just be (6 2 1 1 1 1) flat array technically

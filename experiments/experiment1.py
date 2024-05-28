@@ -3,19 +3,18 @@
 """
 Created on Thu Apr 18 14:23:10 2024
 
-@author: goresky
+@author: Giuseppe Grossi
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
 import scipy.io
 
-import synth 
-import compression as comp
-import solvers as slv
+from estimation import synth 
+from estimation import compression as comp
+from estimation import solvers as slv
 
 
-data = scipy.io.loadmat('xGT.mat')
+data = scipy.io.loadmat('../data/xGT.mat')
 sensitivity = data['S']
 ground_truth = data['xGT']
 print(f'Sensitivity matrix is of size: {sensitivity.shape}, and Ground Truth is of size: {ground_truth.shape}')

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Mon May  6 12:45:09 2024
+Created on Mon Apr  8 14:15:59 2024
 
-@author: goresky
+@author: Giuseppe Grossi
 """
 from functools import partial, reduce 
 import numpy as np

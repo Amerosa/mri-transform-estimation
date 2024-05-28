@@ -3,11 +3,9 @@
 """
 Created on Mon Apr  8 15:31:48 2024
 
-@author: goresky
+@author: Giuseppe Grossi
 """
 import numpy as np
-
-
 
 def sense(x, m, ns, ny, FOV):
     perm = list(range(x.ndim))

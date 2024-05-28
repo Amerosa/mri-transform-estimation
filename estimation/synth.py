@@ -1,5 +1,12 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Apr  8 14:15:59 2024
+
+@author: Giuseppe Grossi
+"""
 import numpy as np
-import sinc_transforms as st
+from . import sinc_transforms as st
 
 def synthesize_T(num_shots, theta, rand_motion=True):
     transform = np.empty((len(num_shots), len(theta)))
@@ -7,21 +14,12 @@ def synthesize_T(num_shots, theta, rand_motion=True):
         ele = np.zeros((1,1,1,1,num_shots[i],6), dtype=np.float32)
         if len(num_shots) == 1 and num_shots[i] == 2 and not rand_motion:
             ele[0,0,0,0,0,3] = theta[j]*np.pi/180
-            #print(f"{i}, {j}, this element {ele}")
         else:
             ele[...,:,3] = np.pi * theta[j] * (np.random.rand(1,1,1,1,num_shots[i]) - 0.5) / 180
         elem = np.mean(ele, axis=4)
         ele = ele - elem 
-        #print(f"Second part of the piepeline {i}, {j}, this element {ele}")
-    #print(transform.shape)
-    return transform
 
-# Example usage:
-#NS = [2]  # Number of transforms for each shot
-#theta = [2,5,10,20]  # Rotation parameters
-#randomMotion = True
-#mine = synthesize_T(NS, theta, rand_motion=False)
-#print(mine)
+    return transform
 
 def generate_spectral_grid(N):
     kGrid = [np.arange(-np.floor(N[m] / 2), np.ceil(N[m] / 2), dtype=np.float32) for m in range(3)]
@@ -62,15 +60,6 @@ def generateGrids(N):
     rkGrid = generate_spatio_spectral_grid(rGrid, kGrid)
     return kGrid, kkGrid, rGrid, rkGrid
 
-## Example usage:ttempted relative ie
-#N = np.array([64, 64, 64])  # Dimensions of the image
-#kGrid, kkGrid, rGrid, rkGrid = generateGrids(N)
-#print("kGrid:", kGrid)
-#print("kkGrid:", kkGrid)
-#print("rGrid:", rGrid)
-#print("rkGrid:", rkGrid)
-#import numpy as np
-
 def generate_filter(img_shape, kgrid):
     kk = np.empty((128,128,2))
     kk[...,0] = np.repeat(kgrid[0], img_shape[1], axis=1)
@@ -95,56 +84,6 @@ def generate_encoding(img_shape, num_shots):
                 enc_mthd[method] = np.fft.ifftshift(enc_mthd[method], axes=(-3,-2))
     return enc_mthd
     
-def generateEncoding(N, kGrid, NS, EncMeth):
-    kk = np.zeros((N[0], N[1], 2))
-    kk[:, :, 0] = np.tile(kGrid[0], (1, N[1]))  # k1 coordinates
-    kk[:, :, 1] = np.tile(kGrid[1], (N[0], 1))  # k2 coordinates
-    kkang = np.arctan2(kk[:, :, 1] , kk[:, :, 0])  # Angular k-coordinates
-    kkrad = np.sqrt(np.sum(kk**2, axis=2))  # Radial k-coordinates
-    indRsort = np.argsort(kkang.ravel())  # Angular sorting of k-coordinates
-    Y = np.sort(kkang.ravel())
-    I, J = np.unravel_index(indRsort, (N[0], N[1]))
-
-    W = np.single(kkrad < np.pi)  # 1 if |k|<pi, for isotropic resolution
-    W = np.fft.ifftshift(np.fft.ifftshift(W, axis=0), axis=1)  # DC at first element
-
-    A = []
-    for S in range(len(NS)):
-        A.append([])
-        for E in range(len(EncMeth)):
-            A[S].append(np.zeros((N[0], N[1], 1, 1, NS[S]), dtype=np.single))
-            if EncMeth[E] == 'LinSeq':  # Cartesian sequential encoding
-                for s in range(NS[S]):
-                    Block = N[1] // NS[S]
-                    A[S][E][:, s * Block:(s + 1) * Block, 0, 0, s] = 1
-            elif EncMeth[E] == 'RadSeq':  # Radial sequential encoding
-                for s in range(NS[S]):
-                    Block = N[0] * N[1] // NS[S]
-                    IBlock = I[s * Block:(s + 1) * Block]
-                    JBlock = J[s * Block:(s + 1) * Block]
-                    for k in range(len(IBlock)):
-                        A[S][E][IBlock[k], JBlock[k], 0, 0, s] = 1
-            elif EncMeth[E] == 'LinPar':  # Cartesian parallel 1D encoding
-                for s in range(NS[S]):
-                    A[S][E][:, s:NS[S]:, 0, 0, s] = 1
-            elif EncMeth[E] == 'LinSqu':  # Cartesian parallel 2D encoding
-                for m in range(N[0]):
-                    for n in range(N[1]):
-                        A[S][E][m, n, 0, 0, (m + n - 1) % NS[S]] = 1
-            elif EncMeth[E] == 'Random':  # Random encoding
-                indRand = np.random.permutation(N[0] * N[1])
-                IR, JR = np.unravel_index(indRand, (N[0], N[1]))
-                for s in range(NS[S]):
-                    Block = N[0] * N[1] // NS[S]
-                    IRBlock = IR[s * Block:(s + 1) * Block]
-                    JRBlock = JR[s * Block:(s + 1) * Block]
-                    for k in range(len(IRBlock)):
-                        A[S][E][IRBlock[k], JRBlock[k], 0, 0, s] = 1
-            else:
-                raise ValueError('Undefined Encoding method')
-            A[S][E] = np.fft.ifftshift(np.fft.ifftshift(A[S][E], axis=0), axis=1)  # DC at first element
-    return A, W
-
 def synthesize_transforms(num_shots, thetas, rand=True):
     results = [None] * len(thetas)
     for i, theta in enumerate(thetas):
@@ -153,10 +92,6 @@ def synthesize_transforms(num_shots, thetas, rand=True):
             transform[3, 0, 0, 0, 0, 0] = theta*np.pi/180
         
         shots_mean = np.mean(transform, axis=1, keepdims=True)  
-        #print(np.squeeze(shots_mean))
-        #print(np.squeeze(transform))
-        #print(f'The transform is matrix is {transform}, with shape {transform.shape}')
-        #print(f'Mean along shots is: {shots_mean}')
         results[i] = transform - shots_mean
     return results
 
@@ -165,15 +100,11 @@ def synthesize_Y(ground_truth, ground_transforms, S, methods, kgrid, kkgrid, rkg
     for T in ground_transforms:
         et = st.precomp_sinc_transforms(kgrid, kkgrid, rkgrid, T, direct=True)
         y = st.sinc_rigid_transform(ground_truth, et, direct=True)
-        #Shape right now is (shots 1 128 128 1)
         y = y * S                  #(shots 32 128 128 1)
         y = np.fft.fftn(y, axes=(-3, -2))
         d = {}
         for method, A in methods.items():
             d[method] = np.sum(y * A, axis=0)
-             #sum over the shots
-            #each theta T will have a dict of 5 methods that created a y
-            #with shape (coils 128 128 1)
         results.append(d)
     return results
 

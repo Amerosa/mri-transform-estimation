@@ -3,15 +3,16 @@
 """
 Created on Mon Apr  8 14:15:59 2024
 
-@author: goresky
+@author: Giuseppe Grossi
 """
 
 #import numpy as np
 import numpy as np
-#from sinc_transforms import pre_comp_sinc_transform, sinc_rigid_transform
-import sinc_transforms as stform
-import isense as sense
-import pyfftw.interfaces.numpy_fft as fft
+import scipy.fft as fft
+
+from . import sinc_transforms as stform
+from . import isense as sense
+
 
 
 def solve_x(X, Y, M, T, S, SH, precond, A, kgrid, kkgrid, rkgrid, n, block_size):
@@ -30,20 +31,8 @@ def solve_x(X, Y, M, T, S, SH, precond, A, kgrid, kkgrid, rkgrid, n, block_size)
     ny = Y.shape #(shots coils 128 128 1)
     ns = S.shape #(coils 128 128 1)
     
-    #num_runs = np.ceil(nt[-1]/block_size) #if blocksize matches num of coils we have 1 run
-    #runs_remaining = nt[-1] % block_size
     num_runs = 1 
-    # vs = []
-    # et_dir = []
-    # et_inv = []
-    # for s in range(num_runs):
-    #     if s != num_runs or runs_remaining == 0:
-    #       vs.append(np.arange(s*block_size + 1, (s+1)*block_size + 1))
-    #     et_dir.append(stform.precomp_sinc_transforms(kgrid, rkgrid, T, di=1))
-    #     et_inv.append(stform.precomp_sinc_transforms(kgrid, rkgrid, T, di=0))
-    #et_dir = [stform.precomp_sinc_transforms(kgrid, rkgrid, T[i,:], direct=True) for i in range(2)]
-    #et_inv = [stform.precomp_sinc_transforms(kgrid, rkgrid, T[i,:], direct=False for i in range(2)]
-    #These will store the et for each shot so 0 and 1
+
     et_dir = stform.precomp_sinc_transforms(kgrid, kkgrid, rkgrid, T, direct=True)
     et_inv = stform.precomp_sinc_transforms(kgrid, kkgrid, rkgrid, T, direct=False)
     

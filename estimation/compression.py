@@ -1,3 +1,10 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Mon May  6 12:45:09 2024
+
+@author: Giuseppe Grossi
+"""
 import numpy as np
 
 def coilArrayCompression(S, y, perc, gpu):
