@@ -174,7 +174,7 @@ def solve_t(x, y, M, T, S, A, kgrid, kkgrid, rgrid, rkgrid, num_iter, w, flag_w,
         for s in range(num_loads):
             et, etg, eth = stform.precomp_sinc_transforms(kgrid, kkgrid, rkgrid, T, compute_grads=True)
             xT, xB = stform.sinc_rigid_transform(x, et, aux_imgs=True)
-            xT = forward_application(x, S, shape_y, FOV)
+            xT = forward_application(xT, S, shape_y, FOV)
             xT = xT - y
             xT = xT * A
             xT_conj = np.conj(xT)
@@ -231,12 +231,12 @@ def solve_t(x, y, M, T, S, A, kgrid, kkgrid, rgrid, rkgrid, num_iter, w, flag_w,
          
         for s in range(num_loads):
             et = stform.precomp_sinc_transforms(kgrid, kkgrid, rkgrid, t_up)
-            xT, _ = stform.sinc_rigid_transform(x, et)
+            xT = stform.sinc_rigid_transform(x, et)
             xT = forward_application(xT, S, shape_y, FOV)
             xT = xT - y
             xT = xT * A
             xT_conj = np.conj(xT)
-            E_prev[:,0,0,0,0] = np.sum(np.real(xT * xT_conj), axis=tuple(range(1,5)))
+            E[:,0,0,0,0] = np.sum(np.real(xT * xT_conj), axis=tuple(range(1,5)))
         
         flag_w[E < E_prev] = 2
         flag_w[E >= E_prev] = 1

@@ -84,7 +84,7 @@ def precomp_sinc_transforms(kgrid, kkgrid, rkgrid, T, direct=True, compute_grads
         eth["trans"] = [-kkgrid[i] * et["trans"] for i in range(6)]
         eth["trans"] = [fft.ifftshift(ele, axes=img_axis) for ele in eth["trans"]]
         
-    et["trans"] = fft.ifftshift(et["trans"])
+    et["trans"] = fft.ifftshift(et["trans"], axes=img_axis)
     
     if compute_grads:
         return et, etg, eth

@@ -27,7 +27,6 @@ img_shape = ground_truth.shape
 
 #Transform Generation
 thetas = [2, 5, 10, 20]
-#thetas = [10]
 num_shots = 2
 ground_transforms = synth.synthesize_transforms(num_shots, thetas, rand=False)
 #returns a list of length number of thetas and each ele is of shape (6 2 1 1 1 1)
@@ -96,14 +95,14 @@ for v in range(len(thetas)):
             print(f'Solving iteration number: {n}', end='\n')
             xant = x
             x = slv.solve_x(x, yIn, M, T, S, SH, precond, A, kgrid, kkgrid, rkgrid, iter_conj_grad, 1)
-            x=x[0]#need to see why extra dim is being added in solve x
+
             #Solve for T
             if should_estimate_t:
                 flagw_prev = flag_w
                 T, x, w, flag_w = slv.solve_t(x,yIn,M,T,S,A,kgrid,kkgrid,rgrid,rkgrid,iter_newtons,w,flag_w)
                 w[w<1e-4] *= 2
                 w[w>1e16] /= 2
-                
+                print(f'Transform value {np.squeeze(T[3,...]) * 180 / np.pi}')
             #Measure error
             xaux = x*max_normalize - ground_truth
             
