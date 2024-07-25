@@ -6,7 +6,12 @@ Created on Mon Apr  8 14:15:59 2024
 @author: Giuseppe Grossi
 """
 import numpy as np
-from . import sinc_transforms as st
+import estimation.sinc_transforms as st
+import matplotlib.pyplot as plt
+
+from collections import namedtuple
+
+Kgrid = namedtuple('Kgrid', ['x', 'y', 'z'])
 
 def synthesize_T(num_shots, theta, rand_motion=True):
     transform = np.empty((len(num_shots), len(theta)))
@@ -90,7 +95,10 @@ def synthesize_transforms(num_shots, thetas, rand=True):
         transform = np.zeros((6, num_shots, 1, 1, 1, 1), dtype=np.single)
         if num_shots == 2 and rand == False:
             transform[3, 0, 0, 0, 0, 0] = theta*np.pi/180
-        
+            transform[0:2,...]  = 10 * (np.random.rand(num_shots, 1,1,1,1)-0.5 )
+        else:
+            transform[3,...] = np.pi*theta* (np.random.rand(num_shots,1,1,1,1)-0.5) / 180
+            #transform[0:2,...]  = 2 * (np.random.rand(num_shots, 1,1,1,1)-0.5 )
         shots_mean = np.mean(transform, axis=1, keepdims=True)  
         results[i] = transform - shots_mean
     return results
@@ -100,46 +108,20 @@ def synthesize_Y(ground_truth, ground_transforms, S, methods, kgrid, kkgrid, rkg
     for T in ground_transforms:
         et = st.precomp_sinc_transforms(kgrid, kkgrid, rkgrid, T, direct=True)
         y = st.sinc_rigid_transform(ground_truth, et, direct=True)
-        y = y * S                  #(shots 32 128 128 1)
+        fig, axs = plt.subplots(nrows=4, ncols=8, figsize=(9, 6),
+                        subplot_kw={'xticks': [], 'yticks': []})
+        #fig.suptitle(f'Random transformations across all shots')
+        i = 1
+        for ax, img in zip(axs.flat, y):
+            ax.imshow(np.abs(np.squeeze(img)), cmap='gray')
+            ax.set_title(f'Shot #{i}')
+            i += 1
+        plt.tight_layout()
+        plt.show()
+        y = y * S 
         y = np.fft.fftn(y, axes=(-3, -2))
         d = {}
         for method, A in methods.items():
             d[method] = np.sum(y * A, axis=0)
         results.append(d)
-    return results
-
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
+    return results  

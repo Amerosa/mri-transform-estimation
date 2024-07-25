@@ -13,6 +13,7 @@ from estimation import synth
 from estimation import compression as comp
 from estimation import solvers as slv
 
+import matplotlib.pyplot as plt
 
 data = scipy.io.loadmat('../data/xGT.mat')
 sensitivity = data['S']
@@ -26,8 +27,8 @@ ground_truth = np.atleast_3d(ground_truth)
 img_shape = ground_truth.shape
 
 #Transform Generation
-thetas = [2, 5, 10, 20]
-num_shots = 2
+thetas = [10]
+num_shots = 32
 ground_transforms = synth.synthesize_transforms(num_shots, thetas, rand=False)
 #returns a list of length number of thetas and each ele is of shape (6 2 1 1 1 1)
 
@@ -40,6 +41,10 @@ iso_filter = synth.generate_filter(img_shape, kgrid)
 iso_filter = np.atleast_3d(iso_filter)
 #Apply iso filter
 ground_truth = np.fft.ifftn(iso_filter * np.fft.fftn(ground_truth,axes=(-3,-2)), axes=(-3,-2))
+plt.imshow(np.abs(np.squeeze(ground_truth)), cmap='gray')
+plt.axis('off')
+plt.title("Ground Truth")
+plt.show()
 
 #Coil Array compression
 S, _ = comp.coilArrayCompression(sensitivity, None, 0.99, 0)
@@ -123,6 +128,10 @@ for v in range(len(thetas)):
     x_estimate.append(results)
     if should_estimate_t:
         t_estimate.append(T)
-        
-            
+
+for idx, img in enumerate(x_estimate):
+    plt.imshow(np.abs(np.squeeze(img['LinPar'])), cmap='gray')
+    plt.axis('off')
+    plt.title(f'Estimate')
+    plt.show()
         

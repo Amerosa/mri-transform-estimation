@@ -211,7 +211,7 @@ def solve_t(x, y, M, T, S, A, kgrid, kkgrid, rgrid, rkgrid, num_iter, w, flag_w,
                     MHe[sods[1, k]-1, sods[0,k]-1] = dHe[k, s]
             dH[:, s] = np.linalg.lstsq(MHe, dH[:,s], rcond=None)[0]
         
-        t_up = T - np.reshape(dH, (6,2,1,1,1,1))
+        t_up = T - np.reshape(dH, shape_t)
         t_ang = t_up[3:,...]
         
         while np.any(t_ang > np.pi):
