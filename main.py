@@ -6,7 +6,7 @@ Created on Thu Jul 18 17:18:37 2024
 """
 import argparse
 import twixtools
-from sigpy import backend    
+from sigpy import backend  
 from estimation.algos import JointEstimation
 import numpy as np
 import sigpy as sp
@@ -48,19 +48,23 @@ if __name__ == '__main__':
     parser.add_argument("--output", help="Output file for the reconstructed image")
     parser.add_argument("--maps", help="File for sensitivity maps if already generated")
     parser.add_argument("--save_maps", help="Save the estimated maps to file for resuse")
-    parser.add_argument("--device_id", help="Integer for the device, -1 for cpu other for gpu")
+    parser.add_argument("--device_id", type=int, help="Integer for the device, -1 for cpu other for gpu")
+    parser.add_argument("--bins", type=int, help="Number of linescans we transform estimate at once")
+    parser.add_argument("--bin_size", type=int, help="Size of bins")
     args = parser.parse_args()
     
     kspace_file = args.input
     dst_file = args.output
     
-    kspace, refscan = get_kspaces(kspace_file)
-    device = sp.Device(args.device_id)
+    #kspace, refscan = get_kspaces(kspace_file)
+    kspace = np.load(args.input)
+    device = sp.Device(-1)
     device.use()
     
     if args.maps is None:
         #Estimate maps from the low res refscan
-        maps = sp.mri.app.EspiritCalib(refscan, device=device)
+        #maps = sp.mri.app.EspiritCalib(refscan, device=device)
+        pass
     else:
         maps = np.load(args.maps)
 
@@ -71,8 +75,8 @@ if __name__ == '__main__':
     kspace = backend.to_device(kspace, device)
     maps = backend.to_device(maps, device)
 
-    alg = JointEstimation(kspace, maps, 3, 1, 100)
+    alg = JointEstimation(kspace, maps, args.bins, args.bin_size, 3, 1, 100, tol=1e-12)
     while not alg.done():
         print(f'Join Iteration number {alg.iter + 1 }')
         alg.update()
-    xp.save(alg.recon_image, dst_file)
+    xp.save(dst_file, alg.recon_image)
