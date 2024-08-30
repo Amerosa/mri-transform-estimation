@@ -2,10 +2,12 @@ from sigpy.alg import Alg
 from sigpy import backend
 from sigpy.mri.linop import Sense
 from sigpy.mri.app import _estimate_weights
-from sigpy.app import LinearLeastSquares
+from sigpy.app import LinearLeastSquares, App
 from estimation.linop import RigidTransform
+from sigpy.linop import Multiply
 import time 
-
+import sigpy.plot as pl
+import numpy as np
 class TransformEstimation(Alg):
     def __init__(self, A, transform_states, image, kspace, max_iter):
         self.A = A
@@ -74,53 +76,88 @@ class TransformEstimation(Alg):
             T = self.rigid_transform.Transform()
             w = self.A * T * self.image - self.kspace
             fz_next = xp.sum(xp.real(xp.conj(w) * w))
-            print(f'New parameters -> {z_next[:3], z_next[3:] * 180 / xp.pi }')
+
             if fz_next > fz:
                 self.winic *= 2
             else:
                 self.winic /= 1.2
-            
+
+class TransformEstimationRecon(App):
+    def __init__(self, A, states, image, kspace, max_iter):
+        self.states = states
+        self.image = image
+        alg = TransformEstimation(A, self.states, image, kspace, max_iter)
+        np.set_printoptions(precision=2)
+        super().__init__(alg, show_pbar=False)
+
+    def _output(self):
+        print('-'*40)
+        print(f'Estimated transform parameters are: {self.states.parameters}')
+        print('-'*40)
+        print('\n')
+        return self.states.parameters
+
+    def _post_update(self):
+        print(f'Iteration: {self.alg.iter} -> {self.states.parameters}')
+
 class JointEstimation(Alg):
-    def __init__(self, kspace, maps, cg_iter, nm_iter, joint_iter, tol=1e-6):
+    def __init__(self, kspace, maps, bins, bsize, cg_iter, nm_iter, joint_iter, tol=1e-6):
 
         self.img_shape = kspace.shape[1:]
 
         weights = _estimate_weights(kspace, None, None)
-        self.A = Sense(maps, weights=weights)
+        self.A = Sense(maps, weights=weights, coil_batch_size=None)
         self.kspace = kspace
         self.maps = maps
         self.cg_iter = cg_iter
         self.nm_iter = nm_iter
         self.tol = tol
+        self.bins = bins
+        self.bsize = bsize
 
         self.device = backend.get_device(kspace)
         with self.device:
             xp = self.device.xp
-            initial_prams = xp.zeros(6, dtype=xp.float64)
-            self.tform_states = RigidTransform(initial_prams, self.img_shape, self.device)
+            self.tform_parameters = xp.zeros(6, dtype=xp.float64)
             self.recon_image = xp.zeros(self.img_shape, dtype=xp.complex64)
-            self.xerr = xp.inf
+            self.xerr = xp.infty
+            p = 1 / (xp.sum(xp.abs(maps)**2, axis=0) + 0.001)
+            self.P = Multiply(self.img_shape, p)
         super().__init__(joint_iter)
 
     def _update(self):
-        xant = self.recon_image
-        self.recon_image = LinearLeastSquares(self.A * self.tform_states.Transform(), self.kspace, max_iter=self.cg_iter).run()
+        print(f'Iteration: {self.iter} with tform {self.tform_parameters}')
 
-        start = time.perf_counter()
-        solver_t = TransformEstimation(self.A, self.tform_states, self.recon_image, self.kspace, max_iter=self.nm_iter)
-        while not solver_t.done():
-            solver_t.update()
-        finish = time.perf_counter()
-        print(f'Solve T time elapsed is {finish - start}')
+        tform_states = RigidTransform(self.tform_parameters, self.img_shape, self.device)
+        xant = self.recon_image
+        self.recon_image = LinearLeastSquares(self.A * tform_states.Transform(), self.kspace, x=self.recon_image, P=self.P, max_iter=self.cg_iter, show_pbar=False).run()
+
+        tform_params_temp = []
+        for b in range(self.bins):
+            extraction = np.zeros(self.kspace.shape, dtype=np.complex64)
+            extraction[:, b*self.bsize:(b+1)*self.bsize] = self.kspace[:, b*self.bsize:(b+1)*self.bsize]
+            #pl.ImagePlot(np.squeeze(self.A.H * extraction), title=f'Motion state {b}')
+            tform_states = RigidTransform(self.tform_parameters, self.img_shape, self.device)
+            start = time.perf_counter()
+            t_params = TransformEstimationRecon(self.A, tform_states, self.recon_image, extraction, max_iter=self.nm_iter).run()
+            finish = time.perf_counter()
+            tform_params_temp.append(t_params)
+            print(f'Motion state {b} took {(finish - start):.2f} seconds to complete')
+
+        t_med = np.array(tform_params_temp).mean(0) #Mean params across all the motions states
+        self.recon_image = RigidTransform(t_med, self.img_shape, self.device).Transform() * self.recon_image
+        self.tform_parameters -= t_med
 
         xp = self.device.xp
         xant = self.recon_image - xant
         xant = xp.real(xant*xant.conj())
         xant = xp.max(xant)
-        self.xerr = xant
+        self.xerr = xant 
+        #self.xerr = xp.linalg.norm(xant - self.recon_image)
+        print(f'Error is {self.xerr}')
     
     def _done(self):
-        return (self.iter >= self.max_iter) or self.xerr <= self.tol
+        return (self.iter >= self.max_iter) or (self.xerr <= self.tol)
 
 
 

@@ -44,7 +44,7 @@ class RTransform(linop.Linop):
 
 
 class RigidTransform(linop.Linop):
-    def __init__(self, parameters, img_shape, device):
+    def __init__(self, parameters, img_shape, device=backend.cpu_device):
         self.parameters = parameters
         self.img_shape = img_shape
         self.img_dims = len(img_shape)
@@ -123,10 +123,7 @@ class RigidTransform(linop.Linop):
                               self.Shear(factors_tan[index], axis_one)])
     
     def Translation(self, direct=True):
-        if direct:
-            factors = self.factors_u
-        else:
-            factors = self.factors_inv_u
+        factors = self.factors_u
         return linop.Compose([linop.IFFT(self.img_shape, axes=(-1,-2,-3)),
                               linop.Multiply(self.img_shape, factors),
                               linop.FFT(self.img_shape, axes=(-1,-2,-3))])
@@ -191,10 +188,9 @@ class RigidTransform(linop.Linop):
         xp = self.device.xp
         sx, sy, sz = self.img_shape
         r1, r2, r3 = xp.mgrid[:sx, :sy, :sz].astype(xp.float64)
-        centroid = tuple(map(lambda x: -(x//-2), self.img_shape))
-        r1 -= centroid[0]
-        r2 -= centroid[1]
-        r3 -= centroid[2]
+        r1 -= -(self.img_shape[0]//-2) if sx > 1 else -1
+        r2 -= -(self.img_shape[1]//-2) if sy > 1 else -1
+        r3 -= -(self.img_shape[2]//-2) if sz > 1 else -1
         return r1, r2, r3
     
     def generate_rkgrid(self):
@@ -229,7 +225,7 @@ class RigidTransform(linop.Linop):
     
     def calc_first_order_factors(self):
         xp = self.device.xp
-        rotations = self.parameters[:3]
+        rotations = self.parameters[3:]
 
         #self.factors_dtan = [1j*( (1 + xp.tan(rotations[idx]/2) ** 2) / 2) * self.kgrid[(idx+1)%3] * self.rgrid[(idx+2)%3] * self.factors_tan[idx] for idx in range(3)]
         tan_rot = (1 + (xp.tan(rotations/2) ** 2)) / 2
@@ -246,18 +242,18 @@ class RigidTransform(linop.Linop):
             self.factors_dsin.append( -1j * cos_rot[idx] * self.kgrid[l2] * self.rgrid[l1] * self.factors_sin[idx])
         
         du = [-1j*self.kgrid[idx] * self.factors_u for idx in range(3)]
-        self.factors_du = xp.stack(du, axis=0)
+        self.factors_du = xp.array(du)
 
     def calc_second_order_factors(self):
         xp = self.device.xp
-        rotations = self.parameters[:3]
-        self.factors_ddtan = [ (xp.tan(rotations[idx]/2) + 1j*((1+xp.tan(rotations[idx]/2)**2)/2) * self.kgrid[(idx+1)%3] * self.rgrid[(idx+1)%3]) * self.factors_dtan[idx] for idx in range(3) ]
+        rotations = self.parameters[3:]
+        self.factors_ddtan = [ (xp.tan(rotations[idx]/2) + 1j*((1+xp.tan(rotations[idx]/2)**2)/2) * self.kgrid[(idx+1)%3] * self.rgrid[(idx+2)%3]) * self.factors_dtan[idx] for idx in range(3) ]
         self.factors_ddsin = [ -1*(xp.tan(rotations[idx] + 1j*xp.cos(rotations[idx] * self.kgrid[(idx+2)%3] * self.rgrid[(idx+1)%3]))) * self.factors_dsin[idx] for idx in range(3)]
 
-        u_part1 = [-self.kgrid[0] * self.kgrid[idx] for idx in range(3)]
-        u_part2 = [-self.kgrid[1] * self.kgrid[idx] for idx in range(3)]
-        u_part3 = [-self.kgrid[2] * self.kgrid[idx] for idx in range(3)]
-        self.factors_ddu = xp.stack([xp.stack(u_part1), xp.stack(u_part2), xp.stack(u_part3)])
+        u_part1 = [-self.kgrid[0] * self.kgrid[idx] * self.factors_u for idx in range(3)]
+        u_part2 = [-self.kgrid[1] * self.kgrid[idx] * self.factors_u for idx in range(3)]
+        u_part3 = [-self.kgrid[2] * self.kgrid[idx] * self.factors_u for idx in range(3)]
+        self.factors_ddu = xp.array([u_part1, u_part2, u_part3])
 
     def update_factors(self, parameters, partials=True):
         self.parameters = parameters
@@ -311,9 +307,9 @@ class RigidTransform(linop.Linop):
         elif 0 <= fp_idx <= 2 and sp_idx == 4:
             return self.DTranslation(fp_idx) * self.R1 * self.DR2 * self.R3 
         elif 0 <= fp_idx <= 2 and sp_idx == 5:
-             return self.DTranslation(fp_idx) * self.R1 * self.R2 * self.DR3 
+            return self.DTranslation(fp_idx) * self.R1 * self.R2 * self.DR3 
         elif fp_idx == 3 and sp_idx == 3:
-           return self.Translation() * self.DDR1 * self.R2 * self.R3
+            return self.Translation() * self.DDR1 * self.R2 * self.R3
         elif fp_idx == 3 and sp_idx == 4:
             return self.Translation() * self.DR1 * self.DR2 * self.R3 
         elif fp_idx == 3 and sp_idx == 5:
