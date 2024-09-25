@@ -81,17 +81,17 @@ if __name__ == '__main__':
     corr_kspace = np.sum(E * image, axis=1)
     #print(corr_kspace.shape)
 
-    T = RigidTransform(image.shape, factors_trans, factors_tan, factors_sin)
-    S = sp.linop.Multiply(corr_kspace.shape[1:], mps)
-    F = sp.linop.FFT(corr_kspace.shape, axes=(-1,-2,-3))
+    #T = RigidTransform(image.shape, factors_trans, factors_tan, factors_sin)
+    #S = sp.linop.Multiply(corr_kspace.shape[1:], mps)
+    #F = sp.linop.FFT(corr_kspace.shape, axes=(-1,-2,-3))
     #pl.ImagePlot( (S.H*F.H * F * S * T *small_img)[...,0], z=0)
     #pl.ImagePlot( (S.H * F.H*E*small_img)[...,0], z=0)
-    corr_img = S.H * F.H * corr_kspace
-    corr_img = xp.sum(corr_img, axis=0)
+    #corr_img = S.H * F.H * corr_kspace
+    #corr_img = xp.sum(corr_img, axis=0)
     #print(corr_img.shape)
     #pl.ImagePlot(masks, z=0)
-    pl.ImagePlot((T * image), z=0, title='Applied transforms for motion states')
-    pl.ImagePlot(corr_img, 'Motion corrupted image')
+    #pl.ImagePlot((T * image), z=0, title='Applied transforms for motion states')
+    #pl.ImagePlot(corr_img, title='Motion corrupted image')
 
 
     alg = JointEstimation(mps, masks, corr_kspace, kgrid, kkgrid, rgrid, rkgrid)
