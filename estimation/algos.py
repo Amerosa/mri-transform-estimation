@@ -135,7 +135,7 @@ class JointEstimation(sp.alg.Alg):
         factors_trans, factors_tan, factors_sin = calc_factors(self.transforms, self.kgrid, self.rkgrid)
         E = AlignedSense(self.x, self.mps, self.masks, factors_trans, factors_tan, factors_sin, shot_batch_size=None)
         #need to modify kspace to have an extra dim for the shots
-        sp.app.LinearLeastSquares(E, np.repeat(self.kspace[:, np.newaxis], self.num_shots, 1), self.x, P=self.P, max_iter=3, tol=1e-6, show_pbar=False).run()
+        sp.app.LinearLeastSquares(E, np.repeat(self.kspace[:, np.newaxis], self.num_shots, 1), self.x, P=self.P, max_iter=3, show_pbar=False).run()
         
         t_est_alg = TransformEstimation(self.mps, self.masks, self.transforms, self.x, self.kspace, self.kgrid, self.kkgrid, self.rgrid, self.rkgrid, self.winic, max_iter=1)
         while not t_est_alg.done():
