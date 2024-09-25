@@ -5,7 +5,6 @@ Created on Thu Jul 18 17:18:37 2024
 @author: giuseppe
 """
 import argparse
-from sigpy import backend  
 import numpy as np
 import sigpy as sp
 import time
@@ -27,12 +26,7 @@ if __name__ == '__main__':
     device = sp.Device(-1)
     device.use()
     
-
     mps = np.load(args.maps)
-
-    xp = device.xp
-    image = backend.to_device(image, device)
-    mps = backend.to_device(mps, device)
 
     kgrid, kkgrid, rgrid, rkgrid = make_grids(image.shape)
     transforms = make_transforms([[0,0,0,5,0,0], [0,0,0,-5,0,0]])
