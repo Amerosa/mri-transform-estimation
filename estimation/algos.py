@@ -98,17 +98,17 @@ class TransformEstimation(sp.alg.Alg):
             self.decreasing_err = (error_next < error_prev).all()
             if (error_next < error_prev).any():
                 idxs = (error_next < error_prev).nonzero()
-                self.transforms[idxs] = z_next[idx]
+                self.transforms[idxs] = z_next[idxs]
 
 
             z_med = xp.mean(self.transforms, axis=0, keepdims=True)
             factors_trans, factors_tan, factors_sin = calc_factors(z_med, self.kgrid, self.rkgrid)
             T = RigidTransform(self.img.shape, factors_trans, factors_tan, factors_sin)
             self.img = xp.sum(T * self.img, axis=0)
-            self.transforms = z_next - z_med
+            self.transforms -= z_med
 
 class JointEstimation(sp.alg.Alg):
-    def __init__(self, mps, masks, kspace, kgrid, kkgrid, rgrid, rkgrid, tol=1e-6, max_iter=100):
+    def __init__(self, mps, masks, kspace, kgrid, kkgrid, rgrid, rkgrid, tol=1e-6, img_recon_iter=3, t_est_iter=1, max_iter=100):
         self.x = np.zeros(mps.shape[1:], dtype=np.complex64)
         self.num_shots = len(masks)
         self.transforms = np.zeros((self.num_shots, 6), dtype=np.float64)
@@ -127,6 +127,9 @@ class JointEstimation(sp.alg.Alg):
         self.xerr = np.infty
         self.tol = tol
         self.decreasing_err = False
+
+        self.img_recon_iter = img_recon_iter
+        self.t_est_iter = t_est_iter
         super().__init__(max_iter)
 
     def _update(self):
@@ -135,9 +138,9 @@ class JointEstimation(sp.alg.Alg):
         factors_trans, factors_tan, factors_sin = calc_factors(self.transforms, self.kgrid, self.rkgrid)
         E = AlignedSense(self.x, self.mps, self.masks, factors_trans, factors_tan, factors_sin, shot_batch_size=None)
         #need to modify kspace to have an extra dim for the shots
-        sp.app.LinearLeastSquares(E, np.repeat(self.kspace[:, np.newaxis], self.num_shots, 1), self.x, P=self.P, max_iter=3, show_pbar=False).run()
+        sp.app.LinearLeastSquares(E, np.repeat(self.kspace[:, np.newaxis], self.num_shots, 1), self.x, P=self.P, max_iter=self.img_recon_iter, show_pbar=False).run()
         
-        t_est_alg = TransformEstimation(self.mps, self.masks, self.transforms, self.x, self.kspace, self.kgrid, self.kkgrid, self.rgrid, self.rkgrid, self.winic, max_iter=1)
+        t_est_alg = TransformEstimation(self.mps, self.masks, self.transforms, self.x, self.kspace, self.kgrid, self.kkgrid, self.rgrid, self.rkgrid, self.winic, max_iter=self.t_est_iter)
         while not t_est_alg.done():
             t_est_alg.update()
         self.transforms = t_est_alg.transforms
