@@ -19,6 +19,8 @@ if __name__ == '__main__':
     parser.add_argument("maps", help="File for sensitivity maps if already generated")
     parser.add_argument("--bins", type=int, help="Number of linescans we transform estimate at once")
     parser.add_argument("--bin_size", type=int, help="Size of bins")
+    parser.add_argument("--img_recon_iter", type=int, help="Number of iterations for image recon subproblem")
+    parser.add_argument("--t_est_iter", type=int, help="Number of iterations for transform estimation subproblem")
     args = parser.parse_args()
         
     #kspace, refscan = get_kspaces(kspace_file)
@@ -55,13 +57,13 @@ if __name__ == '__main__':
     #pl.ImagePlot(corr_img, title='Motion corrupted image')
 
 
-    alg = JointEstimation(mps, masks, corr_kspace, kgrid, kkgrid, rgrid, rkgrid)
-    print('Starting Recon ...')
+    alg = JointEstimation(mps, masks, corr_kspace, kgrid, kkgrid, rgrid, rkgrid, img_recon_iter=args.img_recon_iter, t_est_iter=args.t_est_iter)
+    print(f'Starting Recon ...')
+    print(f'Experiment | CG iter {args.img_recon_iter}, Newtons iter {args.t_est_iter}')
     while not alg.done():
         start = time.perf_counter()
         alg.update()
         print(f'Iteration: {alg.iter} Transforms: {alg.transforms[:, 3:] * 180 / np.pi}')
         print(f'Time Elapsed is {time.perf_counter() - start} s ... Error: {alg.xerr}')
-        
-        
-    xp.save(args.output, alg.x)
+                
+    np.save(args.output, alg.x)
