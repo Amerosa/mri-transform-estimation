@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from . import sinc_transforms as stforms
+#from . import sinc_transforms as stforms
 import numpy as np
 import scipy.fft as fft
 import sigpy as sp
@@ -16,7 +16,6 @@ def error_fit(x, T, S, A, y, kgrid, rkgrid):
     return np.sum(np.real(x*np.conj(x)))
 
 def make_transforms(params, device=sp.cpu_device):
-    device = sp.Device(device)
     xp = device.xp
     #if len(params) == 1:
     #    p = xp.array(params).reshape(1, -1)

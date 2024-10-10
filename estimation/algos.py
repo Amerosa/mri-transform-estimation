@@ -1,7 +1,8 @@
 import sigpy as sp
-import numpy as np
+import numpy as xp
 from .factors import *
 from .encoding import *
+from .utils import *
 
 class TransformEstimation(sp.alg.Alg):
     def __init__(self, mps, masks, transforms, image, kspace, kgrid, kkgrid, rgrid, rkgrid, winic, max_iter):
@@ -39,7 +40,7 @@ class TransformEstimation(sp.alg.Alg):
             grad_factors, hess_factors = calc_derivative_factors(self.transforms, self.kgrid, self.kkgrid, self.rkgrid, factors_trans, factors_tan, factors_sin)
             
             E = AlignedSense(self.img, self.mps, self.masks, factors_trans, factors_tan, factors_sin) #[channels, shots, kx, ky, kz]
-            w  = (E * self.img) - self.kspace[:, xp.newaxis]
+            w  = (E * self.img) - (self.masks * self.kspace[:, xp.newaxis])
             w_conj = xp.conj(w)
             error_prev = xp.sum(xp.real(w * w_conj), axis=(0,2,3,4)) #each shot will have its own error    
 
@@ -54,8 +55,10 @@ class TransformEstimation(sp.alg.Alg):
             #Calculating the second order partials for the Hessian matrix
             #Only the 22 partials of the upper right triangle are calculated
             #then copied to the bottom under the diagonal
-            
-            for l, m in xp.nditer(xp.triu_indices(6)):
+            rows, cols = xp.triu_indices(6)
+            rows = rows.tolist()
+            cols = cols.tolist()
+            for l, m in zip(rows, cols):
                 gl = GradAlignedSense(self.img, l, self.mps, self.masks, factors_trans, factors_tan, factors_sin, grad_factors, shot_batch_size=None) * self.img
                 gm = GradAlignedSense(self.img, m, self.mps, self.masks, factors_trans, factors_tan, factors_sin, grad_factors, shot_batch_size=None) * self.img
                 he = HessAlignedSense(self.img, l, m, self.mps, self.masks, factors_trans, factors_tan, factors_sin, grad_factors, hess_factors, shot_batch_size=None) * self.img
@@ -90,7 +93,7 @@ class TransformEstimation(sp.alg.Alg):
 
             factors_trans, factors_tan, factors_sin = calc_factors(z_next, self.kgrid, self.rkgrid)
             E = AlignedSense(self.img, self.mps, self.masks, factors_trans, factors_tan, factors_sin) #[channels, shots, kx, ky, kz]
-            w = (E * self.img) - self.kspace[:, xp.newaxis]
+            w = (E * self.img) - (self.masks * self.kspace[:, xp.newaxis])
             error_next = xp.sum(xp.real(xp.conj(w) * w), axis=(0,2,3,4))
 
             self.winic = xp.where(error_next > error_prev, self.winic*2, self.winic/1.2)
@@ -109,23 +112,21 @@ class TransformEstimation(sp.alg.Alg):
             self.transforms -= z_med
 
 class JointEstimation(sp.alg.Alg):
-    def __init__(self, mps, masks, kspace, kgrid, kkgrid, rgrid, rkgrid, tol=1e-6, img_recon_iter=3, t_est_iter=1, max_iter=100):
-        self.x = np.zeros(mps.shape[1:], dtype=np.complex64)
-        self.num_shots = len(masks)
-        self.transforms = np.zeros((self.num_shots, 6), dtype=np.float64)
-        self.mps = mps
-        self.masks = masks
+    def __init__(self, kspace, mps, masks, img, transforms, img_recon_iter=3, t_est_iter=1, max_iter=100, tol=1e-6):
+        self.device = sp.Device(-1)
+        xp = self.device.xp
+        self.x = img
+        self.num_shots = len(masks)   
+        self.transforms = transforms
         self.kspace = kspace
-        
-        self.winic = np.ones(self.num_shots)
-        self.kgrid = kgrid
-        self.kkgrid = kkgrid
-        self.rgrid = rgrid
-        self.rkgrid = rkgrid
+        self.mps = mps
+        self.masks = masks    
+        self.winic = xp.ones(self.num_shots)
+        self.kgrid, self.kkgrid, self.rgrid, self.rkgrid = make_grids(self.x.shape)
 
-        p = 1 / (np.sum(np.abs(mps)**2, axis=0) + 0.001)
+        p = 1 / (xp.sum(xp.abs(self.mps)**2, axis=0) + 0.001)
         self.P = sp.linop.Multiply(mps.shape[1:], p)
-        self.xerr = np.infty
+        self.xerr = xp.infty
         self.tol = tol
         self.decreasing_err = False
 
@@ -134,12 +135,12 @@ class JointEstimation(sp.alg.Alg):
         super().__init__(max_iter)
 
     def _update(self):
-
+        xp = self.device.xp
         prev_x = self.x.copy()
         factors_trans, factors_tan, factors_sin = calc_factors(self.transforms, self.kgrid, self.rkgrid)
         E = AlignedSense(self.x, self.mps, self.masks, factors_trans, factors_tan, factors_sin, shot_batch_size=None)
         SM = sp.linop.Sum(E.oshape, axes=(1,))
-        sp.app.LinearLeastSquares(SM*E, self.kspace, self.x, P=None, max_iter=self.img_recon_iter, show_pbar=False).run()
+        self.x = sp.app.LinearLeastSquares(SM*E, self.kspace, self.x, P=self.P, max_iter=self.img_recon_iter, show_pbar=False).run()
         
         t_est_alg = TransformEstimation(self.mps, self.masks, self.transforms, self.x, self.kspace, self.kgrid, self.kkgrid, self.rgrid, self.rkgrid, self.winic, max_iter=self.t_est_iter)
         while not t_est_alg.done():
@@ -148,9 +149,10 @@ class JointEstimation(sp.alg.Alg):
         self.x = t_est_alg.img
         self.winic = t_est_alg.winic
         self.decreasing_err = t_est_alg.decreasing_err
-        self.xerr = self.x - prev_x
-        self.xerr = np.real(self.xerr * np.conj(self.xerr))
-        self.xerr = np.max(self.xerr)
+        self.xerr = (self.x - prev_x) #/ self.x
+        self.xerr = xp.real(self.xerr * xp.conj(self.xerr))
+        self.xerr = xp.max(self.xerr) # / xp.abs(self.x))
+        self.xerr /= xp.max(xp.real(self.x * xp.conj(self.x)))
 
     def _done(self):
         return (self.iter >= self.max_iter) or (self.xerr < self.tol and self.decreasing_err == True)
