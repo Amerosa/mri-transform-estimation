@@ -149,10 +149,11 @@ class JointEstimation(sp.alg.Alg):
         self.x = t_est_alg.img
         self.winic = t_est_alg.winic
         self.decreasing_err = t_est_alg.decreasing_err
-        self.xerr = (self.x - prev_x) #/ self.x
-        self.xerr = xp.real(self.xerr * xp.conj(self.xerr))
-        self.xerr = xp.max(self.xerr) # / xp.abs(self.x))
-        self.xerr /= xp.max(xp.real(self.x * xp.conj(self.x)))
+        
+        with self.device:
+            xp  = self.device.xp
+            img_diff = self.x - prev_x
+            self.xerr = (xp.max(xp.real(img_diff * xp.conj(img_diff))) / xp.max(xp.real(self.x * xp.conj(self.x))) ).item()
 
     def _done(self):
         return (self.iter >= self.max_iter) or (self.xerr < self.tol and self.decreasing_err == True)

@@ -54,11 +54,8 @@ class MotionCorruptedImageRecon(sp.app.App):
         if self.show_pbar:
             self.pbar.set_postfix(
                     max_voxel_change="{0:.2E}".format(
-                        sp.backend.to_device(self.alg.xerr.item(), sp.backend.cpu_device)
-                    ),
-                    rot="{0:.2E}".format(
-                        sp.backend.to_device(self.alg.transforms[0,4].item() * np.pi/180, sp.backend.cpu_device)
-                    ),
+                        sp.backend.to_device(self.alg.xerr, sp.backend.cpu_device)
+                    )
                 )
     
     def _output(self):

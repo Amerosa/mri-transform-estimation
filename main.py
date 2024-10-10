@@ -48,7 +48,7 @@ if __name__ == '__main__':
     max_norm = np.max(np.abs(np.fft.ifftn(corr_kspace, axes=(-3,-2,-1))))
     corr_kspace /= max_norm
 
-    recon = MotionCorruptedImageRecon(corr_kspace, mps, masks, tol=1e-12).run()
+    recon = MotionCorruptedImageRecon(corr_kspace, mps, masks, tol=1e-6).run()
     pl.ImagePlot(recon * max_norm)
 """     gt = image / max_norm
     max_diff = []
