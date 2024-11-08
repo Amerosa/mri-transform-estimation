@@ -24,3 +24,12 @@ def make_transforms(params, device=sp.cpu_device):
         p[:, 3:] *= xp.pi / 180
     
     return p
+
+def downsample_4d(array, factor):
+    xs = array.shape[-3] // factor
+    ys = array.shape[-2] // factor
+    zs = array.shape[-1] // factor
+    x_start = (array.shape[1] - xs) // 2
+    y_start = (array.shape[2] - ys) // 2
+    z_start = (array.shape[3] - zs) // 2
+    return array[:, x_start:x_start+xs, y_start:y_start+ys,:]

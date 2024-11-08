@@ -14,9 +14,6 @@ def calc_factors(parameters, kgrid, rkgrid):
         factors_tan.append(xp.exp(tan_op[:, idx] * rkgrid[0][idx]).astype(xp.complex64))
         factors_sin.append(xp.exp(sin_op[:, idx] * rkgrid[1][idx]).astype(xp.complex64))
 
-    #factors_tan = [xp.fft.ifftshift(f, axes=(-3,-2,-1)) for f in factors_tan]
-    #factors_sin = [xp.fft.ifftshift(f, axes=(-3,-2,-1)) for f in factors_sin]
-    #factors_trans = xp.fft.ifftshift(factors_trans, axes=(-3,-2,-1))
     return factors_trans, factors_tan, factors_sin
 
 def calc_derivative_factors(parameters, kgrid, kkgrid, rkgrid, factors_trans, factors_tan, factors_sin):
@@ -38,18 +35,9 @@ def calc_derivative_factors(parameters, kgrid, kkgrid, rkgrid, factors_trans, fa
     hess_factors['tan'] = [(tan_half_theta[:, i] + 1j * tan_quad[:, i] * rkgrid[0][i]) * grad_factors['tan'][i] for i in range(3)]
     hess_factors['sin'] = [ -1 * (tan_theta[:, i] + 1j * cos_theta[:, i] * rkgrid[1][i]) * grad_factors['sin'][i] for i in range(3)]
 
-    """
-    for i in range(3):
-        grad_factors['trans'][i] = xp.fft.ifftshift(grad_factors['trans'][i], axes=(-3,-2,-1))
-        grad_factors['tan'][i] = xp.fft.ifftshift(grad_factors['tan'][i], axes=(-3,-2,-1))
-        grad_factors['sin'][i] = xp.fft.ifftshift(grad_factors['sin'][i], axes=(-3,-2,-1))
-
-        hess_factors['tan'][i] = xp.fft.ifftshift(hess_factors['tan'][i], axes=(-3,-2,-1))
-        hess_factors['sin'][i] = xp.fft.ifftshift(hess_factors['sin'][i], axes=(-3,-2,-1))
-
-        for j in range(3):
-            hess_factors['trans'][i][j] = xp.fft.ifftshift(hess_factors['trans'][i][j], axes=(-3,-2,-1))
-    """
+    for gf in grad_factors.values():
+        for factor in gf:
+            factor = factor.astype(xp.complex64)
 
     return grad_factors, hess_factors
 
@@ -58,9 +46,9 @@ def make_grids(shape, device=sp.cpu_device):
     s = xp.array(shape)
     lo = -(s//2)
     hi = -(s//-2)
-    k1 = (xp.linspace(lo[0], hi[0], s[0]) * 2 * xp.pi / s[0]).reshape(-1, 1, 1)
-    k2 = (xp.linspace(lo[1], hi[1], s[1]) * 2 * xp.pi / s[1]).reshape(1, -1, 1)
-    k3 = (xp.linspace(lo[2], hi[2], s[2]) * 2 * xp.pi / s[2]).reshape(1, 1, -1)
+
+    kgrid = [ (axis - shape[i] // 2) * 2 * xp.pi / shape[i] for i, axis in enumerate(xp.ogrid[0:s[0], 0:s[1], 0:s[2]])]
+    k1, k2, k3 = kgrid
 
     r1 = xp.arange(shape[0]) if shape[0] == 1 else (xp.arange(shape[0]) - shape[0] //2 )
     r2 = xp.arange(shape[1]) if shape[1] == 1 else (xp.arange(shape[1]) - shape[1] //2 )
@@ -69,8 +57,6 @@ def make_grids(shape, device=sp.cpu_device):
     r2 = r2.reshape(1,-1,1)
     r3 = r3.reshape(1,1,-1)
 
-
-    kgrid  = [k1, k2, k3]
     rgrid  = [r1, r2, r3]
     kkgrid = [[kgrid[i] * kgrid[j] for j in range(3)] for i in range(3)]
     rkgrid = [[k2 * r3, k3 * r1, k1 * r2], [k3 * r2, k1 * r3, k2 * r1]]
