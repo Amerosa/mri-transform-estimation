@@ -201,8 +201,10 @@ class LevenbergMarquardt(sp.alg.Alg):
                 diff = (E * self.img) - (self.masks[shot_idx] * self.kspace[:, xp.newaxis])
                 energy_next = xp.sum(xp.real(diff * diff.conj()), axis=(0,2,3,4))
 
-                updated_winic = xp.where(energy_next > energy_prev, self.winic*2, self.winic/1.2)
-                sp.copyto(self.winic, updated_winic)
+                if energy_next < energy_prev:
+                    self.winic[shot_idx] = xp.maximum(self.winic[shot_idx]/1.5, 1e-4)
+                else:
+                    self.winic[shot_idx] = xp.minimum(self.winic[shot_idx]*2, 1e16)
 
                 if (energy_next < energy_prev).any():
                     self.decreasing_err = True
