@@ -1,7 +1,7 @@
 import sigpy as sp
 from .factors import calc_factors, make_grids
 from .encoding import AlignedSense
-from .algos import LevenbergMarquardt
+from .transform_solver import LevenbergMarquardt
 from .image_solver import ImageEstimation
 
 class MotionCorruptedImageRecon(sp.app.App):
