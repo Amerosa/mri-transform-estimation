@@ -35,13 +35,12 @@ def downsample_4d(array, factor):
     z_start = (array.shape[3] - zs) // 2
     return array[:, x_start:x_start+xs, y_start:y_start+ys,:]
 
-def generate_corrupt_kspace(img, mps, num_shots, rotations):
+def generate_corrupt_kspace(img, mps, mask, transforms):
+    num_shots = len(transforms)
     kgrid, kkgrid, rgrid, rkgrid = make_grids(img.shape)
-    transforms = generate_transforms(num_shots, rotations)
-    mask = generate_sampling_mask(num_shots, img.shape)
     corr_ksp = np.zeros(mps.shape, dtype=np.complex64)
     for shot_idx in range(num_shots):
         factors_trans, factors_tan, factors_sin = calc_factors(transforms[shot_idx:shot_idx+1], kgrid, rkgrid)
         T = RigidTransform(img.shape, factors_trans, factors_tan, factors_sin)
         corr_ksp += np.sum(mask[shot_idx] * sp.fft(mps[:, np.newaxis] * (T * img), axes=[-3,-2,-1]), axis=1)
-    return corr_ksp, transforms, mask
+    return corr_ksp
