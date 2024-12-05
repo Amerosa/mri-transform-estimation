@@ -55,14 +55,14 @@ class LevenbergMarquardt(sp.alg.Alg):
                     for i in range(6):
                         for j in range(6):
                             if i == j:
-                                hessian[shot, i, j] = (1+self.winic[shot])*xp.sum(xp.real(jacobians[i].conj() * jacobians[j]), axis=(0,2,3,4))
+                                hessian[shot, i, j] = (1+self.winic[shot_idx,i])*xp.sum(xp.real(jacobians[i].conj() * jacobians[j]), axis=(0,2,3,4))
                             else:
                                 hessian[shot, i, j] = xp.sum(xp.real(jacobians[i].conj() * jacobians[j]), axis=(0,2,3,4))
-
+                
                 z_next = xp.zeros((self.shot_batch_size,6))
                 for shot in range(len(z_next)):
-                    delta = xp.linalg.lstsq(hessian[shot], gradient[shot], rcond=None)[0]
-                    delta *= -1 *(1/self.winic[shot])
+                    delta = (xp.linalg.lstsq(hessian[shot], gradient[shot], rcond=None)[0])[None, :]
+                    delta *= -1 * 1/(self.winic[shot_idx])
                     z_next[shot] = self.transforms[(batch_idx*self.shot_batch_size)+shot] + delta
 
                 z_next[:, 3:][z_next[:, 3:] < -xp.pi] += 2 * xp.pi
@@ -75,9 +75,11 @@ class LevenbergMarquardt(sp.alg.Alg):
                 energy_next = xp.sum(xp.real(diff * diff.conj()), axis=(0,2,3,4))
 
                 if energy_next < energy_prev:
-                    self.winic[shot_idx] = xp.maximum(self.winic[shot_idx]/1.2, 1e-4)
+                    self.winic[shot_idx, 3:] = xp.maximum(self.winic[shot_idx, 3:]/5, 1e-4)
+                    self.winic[shot_idx, :3] = xp.maximum(self.winic[shot_idx, :3]/10, 1e-4)
                 else:
-                    self.winic[shot_idx] = xp.minimum(self.winic[shot_idx]*5, 1e16)
+                    self.winic[shot_idx, 3:] = xp.minimum(self.winic[shot_idx, 3:]*1.5, 1e16)
+                    self.winic[shot_idx, :3] = xp.minimum(self.winic[shot_idx, :3]*3, 1e16)
 
                 if (energy_next < energy_prev).any():
                     self.decreasing_err = True

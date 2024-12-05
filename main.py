@@ -7,104 +7,103 @@ Created on Thu Jul 18 17:18:37 2024
 import argparse
 import numpy as np
 import sigpy as sp
-import time
 import sigpy.plot as pl
 
 from estimation import * 
 import matplotlib.pyplot as plt
 
+from estimation.utils import generate_corrupt_kspace
+from estimation.joint_recon import MotionCorruptedImageRecon
+from estimation.image_solver import ImageEstimation
+
 if __name__ == '__main__':
+
     parser = argparse.ArgumentParser()
-    parser.add_argument("input", help="Clean image for experiment")
-    parser.add_argument("output", help="Output file for the reconstructed image")
-    parser.add_argument("maps", help="File for sensitivity maps if already generated")
-    parser.add_argument("--bins", type=int, help="Number of linescans we transform estimate at once")
-    parser.add_argument("--bin_size", type=int, help="Size of bins")
-    parser.add_argument("--img_recon_iter", type=int, help="Number of iterations for image recon subproblem")
-    parser.add_argument("--t_est_iter", type=int, help="Number of iterations for transform estimation subproblem")
+    parser.add_argument("img", help="Clean image for experiment")
+    parser.add_argument("mps", help="File for sensitivity maps if already generated")
+    parser.add_argument("out", help="Output file for the reconstructed image")
+    parser.add_argument("shots", type=int, help="Number of  motion states")
     args = parser.parse_args()
-        
-    #kspace, refscan = get_kspaces(kspace_file)
-    image = np.load(args.input)
-    device = sp.Device(-1)
-    device.use()
-    xp = device.xp
+
+    #Experiment Setup | Synthetic data sample to be used
+    img = np.load(args.img)
+    mps = np.load(args.mps)
+    #from sigpy.mri import sim
+    #from scipy.ndimage import gaussian_filter
+    #img_shape = [32, 32,32]
+    #mps_shape = [10, 32, 32, 32]
+    #img = sp.shepp_logan(img_shape)
+    #img = gaussian_filter(img, 1)
+    #mps = sim.birdcage_maps(mps_shape)
+    num_shots = args.shots
+    rotations = [10,0,0]
+
+    transforms = generate_transforms(num_shots, rotations)
     
-    mps = np.load(args.maps)
+    norm = np.linalg.norm(img)
+    img /= norm
+    mask = generate_sampling_mask(num_shots, img.shape)
+    ksp = generate_corrupt_kspace(img, mps, mask, transforms)
 
-    kgrid, kkgrid, rgrid, rkgrid = make_grids(image.shape, device)
-    transforms = make_transforms([[0,0,0,2.5,0,0], [0,0,0,-2.5,0,0]])
-    factors_trans, factors_tan, factors_sin = calc_factors(transforms, kgrid, rkgrid)
-    num_shots = 2
-    mask_shape = [num_shots] + [*image.shape]
-    masks = np.zeros(mask_shape)
-    masks[0,:, :, 0::2] = 1
-    masks[1,:, :, 1::2] = 1
-    masks.shape
-
-    E = AlignedSense(image, mps, masks, factors_trans, factors_tan, factors_sin)
-    corr_kspace = np.sum(E * image, axis=1)
-
-    max_norm = np.max(np.abs(np.fft.ifftn(corr_kspace, axes=(-3,-2,-1))))
-    corr_kspace /= max_norm
-
-    recon = MotionCorruptedImageRecon(corr_kspace, mps, masks, tol=1e-6).run()
-    pl.ImagePlot(recon * max_norm)
-"""     gt = image / max_norm
-    max_diff = []
-    x_err = []
-    obj_err = []
-    t_err = []
-    init = np.array([[-1.79575717e-04,  8.46043284e-06, -1.74125792e-04,
-         4.34900082e-02,  2.10716159e-05, -4.37268242e-05],
-       [ 1.79575717e-04, -8.46043284e-06,  1.74125792e-04,
-        -4.34900082e-02, -2.10716159e-05,  4.37268242e-05]])
-    alg = JointEstimation(mps, masks, corr_kspace, kgrid, kkgrid, rgrid, rkgrid, transforms=init, tol=1e-6, img_recon_iter=3, t_est_iter=1, max_iter=100)
-    print(f'Starting Recon ...')
-    print(f'Experiment | CG iter {args.img_recon_iter}, Newtons iter {args.t_est_iter}')
-    while not alg.done():
-        start = time.perf_counter()
-        alg.update()
-        #print(f'Iteration: {alg.iter} Transforms: {alg.transforms[:, 3:] * 180 / np.pi}')
-        #print(f'Time Elapsed is {time.perf_counter() - start} s ... Error: {alg.xerr}')
-        max_diff.append(alg.xerr.item())
-        
-        
-        xaux = alg.x * max_norm - image
-        x_err.append( np.sum(np.real(xaux * np.conj(xaux))) / (image.shape[0] * image.shape[1] * image.shape[2]) )
-
-        factors_trans, factors_tan, factors_sin = calc_factors(alg.transforms, kgrid, rkgrid)
-        E = AlignedSense(alg.x, mps, masks, factors_trans, factors_tan, factors_sin)
-        oberr = (E*alg.x) - (masks * corr_kspace[:, None])
-        obj_err.append(np.sum(np.real(oberr * np.conj(oberr))).item())
-
-        t_err.append(np.max(np.abs(alg.transforms - transforms)).item())
-
-        print(f'Iteration: {alg.iter} Transforms: {alg.transforms[:, :3]} {alg.transforms[:, 3:] * 180 / np.pi}')
-        print(f'Time Elapsed is {time.perf_counter() - start} s ... Max diff: {alg.xerr} ... Obj err: {obj_err[-1]} ... xerr: {x_err[-1]} ... terr: {t_err[-1]}')
-        interm = './data/synth/' + str(alg.iter) + '.png'
-        mid_slice = int(image.shape[0]//2) 
-        plt.imsave(interm, np.abs(alg.x[mid_slice,:,:]), cmap='gray')
-
-    #pl.LinePlot(np.array(alg.FT_err), mode='l')            
+    ksp_in = resample(ksp, 2, axes=[-3,-2], is_kspace=True)
+    mps_in = resample(mps, 2, axes=[-3,-2], is_kspace=False)
+    mask_in = resample(mask, 2, axes=[-3,-2], is_kspace=True)
+    ground_truth = resample(img, 2, axes=[-3,-2])
     
-    
-    
-    fig, axs = plt.subplots(2,2)
-    fig.suptitle('Errors for 10 degrees 2 Shots')
-    axs[0, 0].plot(np.log10(obj_err))
-    axs[0, 0].set_title('Objective Func Log10')
-    axs[0, 1].plot(max_diff, 'tab:orange')
-    axs[0, 1].set_title('Max Voxel Diff')
-    axs[1, 0].plot(x_err, 'tab:green')
-    axs[1, 0].set_title('Image error to GT')
-    axs[1, 1].plot(t_err, 'tab:red')
-    axs[1, 1].set_title('Transform error to GT')
+    rss = np.sqrt(np.sum(np.abs(mps_in)**2, axis=0))
+    M = rss > (np.max(rss) * 0.1)
+    p = 1 / (np.sum(np.real(mps_in * mps_in.conj()), axis=0) + 1e-3)
+    P = sp.linop.Multiply(mps_in.shape[1:], p)
 
-    # Hide x labels and tick labels for top plots and y ticks for right plots.
-    for ax in axs.flat:
-        ax.label_outer()
-    
-    plt.show()
-    pl.ImagePlot((alg.x*max_norm))
-    np.save(args.output, alg.x) """
+    recon_four, estimates_ratio_four = MotionCorruptedImageRecon(ksp_in, 
+                                                                 mps_in, 
+                                                                 mask_in, 
+                                                                 img.shape,
+                                                                 constraint=M, 
+                                                                 P=P, 
+                                                                 tol=0, 
+                                                                 max_joint_iter=4_000, 
+                                                                 device=sp.Device(0), 
+                                                                 save_objective_values=True).run()
+
+    #SECOND LEVEL RESOLUTION PYRAMID
+    #REDUCING BY A RATIO OF 2
+    ksp_in = resample(ksp, 1, axes=[-3,-2], is_kspace=True)
+    mps_in = resample(mps, 1, axes=[-3,-2], is_kspace=False)
+    mask_in = resample(mask, 1, axes=[-3,-2], is_kspace=True)
+    ground_truth = resample(img, 1, axes=[-3,-2])
+
+    rss = np.sqrt(np.sum(np.abs(mps_in)**2, axis=0))
+    M = rss > (np.max(rss) * 0.1)
+    p = 1 / (np.sum(np.real(mps_in * mps_in.conj()), axis=0) + 1e-3)
+    P = sp.linop.Multiply(mps_in.shape[1:], p)
+
+    recon_two, estimates_ratio_two = MotionCorruptedImageRecon(ksp_in, 
+                                                               mps_in, 
+                                                               mask_in, 
+                                                               img.shape, 
+                                                               transforms=estimates_ratio_four, 
+                                                               constraint=M, 
+                                                               P=P, 
+                                                               tol=0, 
+                                                               max_joint_iter=500, 
+                                                               device=sp.Device(0), 
+                                                               save_objective_values=True).run()
+
+    #FINAL LEVEL OF RESOLUTION PYRAMID
+    #FULL RESOLUTION IMAGE ESTIMATION ONLY
+    rss = np.sqrt(np.sum(np.abs(mps)**2, axis=0))
+    M = rss > (np.max(rss) * 0.1)
+    p = 1 / (np.sum(np.real(mps * mps.conj()), axis=0) + 1e-3)
+    P = sp.linop.Multiply(mps.shape[1:], p)
+
+    kgrid, _, rgrid, rkgrid = generate_transform_grids(img.shape, device=sp.Device(-1))
+
+    final_recon = ImageEstimation(ksp, mps, mask, estimates_ratio_two.get(), kgrid, rkgrid, constraint=M, P=P, tol=1e-12, max_iter=100, device=sp.Device(-1)).run()
+
+    error_mask = img - final_recon
+    corrupted_img = np.sum(mps.conj() * sp.ifft(ksp, axes=[-3,-2,-1]), axis=0)
+    mid = final_recon.shape[0] // 2 
+    figure = np.concatenate([np.abs(img[mid]), np.abs(corrupted_img[mid]), np.abs(final_recon[mid]), np.abs(error_mask[mid])], axis=-1)
+    np.save(args.out, figure)
+    plt.imsave(args.out, figure, cmap='gray', title=f'Shots: {num_shots}')

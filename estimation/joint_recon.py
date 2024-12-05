@@ -1,15 +1,19 @@
 import sigpy as sp
-from .factors import calc_factors, make_grids
-from .encoding import AlignedSense
+from .factors import generate_transform_grids
 from .transform_solver import LevenbergMarquardt
 from .image_solver import ImageEstimation
+from .metrics import objective_all_shot
+import time
+import numpy as np
+
 
 class MotionCorruptedImageRecon(sp.app.App):
     def __init__(
         self, 
         kspace, 
         mps, 
-        smask, 
+        smask,
+        fullres_shape,
         img=None, 
         transforms=None,
         constraint=None,
@@ -25,6 +29,7 @@ class MotionCorruptedImageRecon(sp.app.App):
         self.kspace = kspace
         self.mps = mps
         self.smask = smask
+        self.fullres_shape = fullres_shape
         self.img = img
         self.transforms = transforms
         self.constraint = constraint
@@ -50,8 +55,8 @@ class MotionCorruptedImageRecon(sp.app.App):
         else:
             self.transforms = sp.to_device(self.transforms, device=device)
 
-        self.damp = xp.ones(len(self.smask))
-        self.kgrid, self.kkgrid, self.rgrid, self.rkgrid = make_grids(self.img.shape, self.device)
+        self.damp = xp.ones((len(self.smask), 6))
+        self.kgrid, self.kkgrid, self.rgrid, self.rkgrid = generate_transform_grids(self.fullres_shape, self.img.shape, self.device)
         self.kspace = sp.to_device(self.kspace, device=device)
         self.mps = sp.to_device(self.mps, device=device)
         self.smask = sp.to_device(self.smask, device=device)
@@ -70,7 +75,7 @@ class MotionCorruptedImageRecon(sp.app.App):
         if self.show_pbar:
             if self.save_objective_values:
                 self.pbar.set_postfix(
-                    obj="{0:.2E}".format(self.objective_values[-1])
+                    obj="{0:.2E}".format(self.objective_values[-1] * 1e6)
                 )
             else:
                 self.pbar.set_postfix(
@@ -92,17 +97,11 @@ class MotionCorruptedImageRecon(sp.app.App):
             print(f'Iteration {self.alg.iter} |')
             for shot in range(len(estimate)):
                 print(f'MotionState {shot+1}: {xp.array_str(estimate[shot], precision=2)}')
+            print(f'Objective: {objective_all_shot(self.img, self.kspace, self.mps, self.smask, self.transforms, self.kgrid, self.rkgrid)}')
             print('-' * 80)
-
+    
     def objective(self):
-        xp = self.device.xp
-        with self.device:
-            kgrid, kkgrid, rgrid, rkgrid = make_grids(self.image.shape, self.device)
-            factors_trans, factors_tan, factors_sin = calc_factors(self.transforms, kgrid, rkgrid)
-            E = AlignedSense(self.image, self.mps, self.smasks, factors_trans, factors_tan, factors_sin)
-            obj_err = (E * self.img)  - (self.smask * self.kspace[:, xp.newaxis])
-            obj_err = xp.sum(obj_err * xp.conj(obj_err)).item()
-        return obj_err
+        return objective_all_shot(self.img, self.kspace, self.mps, self.smask, self.transforms, self.kgrid, self.rkgrid)
     
     def _minX(self):
         ImageEstimation(
@@ -148,14 +147,15 @@ class JointMin(sp.alg.Alg):
         self.tol = tol
         super().__init__(max_iter)
 
+    #TODO Need to come up with a correct convergence right now just runs through max iter
     def _update(self):
-        old_x = self.x.copy()
+        #old_x = self.x.copy()
         self.minX()
         self.minT()
-        with self.device:
-            xp  = self.device.xp
-            diff = self.x - old_x
-            self.xerr = (xp.max(xp.real(diff * xp.conj(diff))) / xp.max(xp.real(self.x * xp.conj(self.x))) ).item()
+        #with self.device:
+            #xp  = self.device.xp
+            #diff = self.x - old_x
+            #self.xerr = (xp.max(xp.real(diff * xp.conj(diff)))).item() / xp.max(xp.real(self.x * xp.conj(self.x))) ).item()
 
     def _done(self):
-        return (self.iter >= self.max_iter) or (self.xerr < self.tol)
+        return (self.iter >= self.max_iter) #or (self.xerr < self.tol)

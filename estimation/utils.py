@@ -1,7 +1,7 @@
 import numpy as np
 import sigpy as sp
-
-from .factors import calc_factors, make_grids
+from math import ceil
+from .factors import calc_factors, generate_transform_grids
 from .transforms import RigidTransform
 
 #TODO include translations parameters as well
@@ -26,19 +26,31 @@ def generate_sampling_mask(num_shots, img_shape):
         #mask[shot, :,:, shot::num_shots] = 1 
     return mask
 
-def downsample_4d(array, factor):
-    xs = array.shape[-3] // factor
-    ys = array.shape[-2] // factor
-    zs = array.shape[-1] // factor
-    x_start = (array.shape[1] - xs) // 2
-    y_start = (array.shape[2] - ys) // 2
-    z_start = (array.shape[3] - zs) // 2
-    return array[:, x_start:x_start+xs, y_start:y_start+ys,:]
+def _normalize_axes(axes, ndim):
+    if axes is None:
+        return tuple(range(ndim))
+    else:
+        return tuple(a % ndim for a in sorted(axes))
+
+def resample(x, subdivisions, axes=None, is_kspace=False):
+    factor = 2 ** subdivisions
+    axes = _normalize_axes(axes, x.ndim)
+    idx = [slice(None)] * x.ndim
+    for axis in axes:
+        mid = x.shape[axis] // 2
+        extent = x.shape[axis] // factor
+        hi = ceil(extent / 2)
+        lo = extent // 2
+        idx[axis] = slice(mid-lo, mid+hi)
+
+    if not is_kspace:
+        return sp.ifft(sp.fft(x, axes=(-3,-2,-1))[*idx], axes=(-3,-2,-1))
+    return x[*idx]
 
 def generate_corrupt_kspace(img, mps, mask, transforms):
     num_shots = len(transforms)
-    kgrid, kkgrid, rgrid, rkgrid = make_grids(img.shape)
-    corr_ksp = np.zeros(mps.shape, dtype=np.complex64)
+    kgrid, _, _, rkgrid = generate_transform_grids(img.shape)
+    corr_ksp = np.zeros(mps.shape, dtype=np.complex128)
     for shot_idx in range(num_shots):
         factors_trans, factors_tan, factors_sin = calc_factors(transforms[shot_idx:shot_idx+1], kgrid, rkgrid)
         T = RigidTransform(img.shape, factors_trans, factors_tan, factors_sin)

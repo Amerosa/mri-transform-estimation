@@ -35,12 +35,13 @@ class ImageEstimation(sp.app.App):
         
         if img is None:
             self.img = device.xp.zeros(kspace.shape[1:], dtype=kspace.dtype)
-        self.img = sp.to_device(img, device)
+        else:
+            self.img = sp.to_device(img, device)
         self.kspace = sp.to_device(self.kspace, device)
         if constraint is not None:
             self.constraint = sp.to_device(self.constraint, device)
         b = self._prep_kspace()
-        b = sp.to_device(b, device)
+        #b = sp.to_device(b, device)
         alg = sp.alg.ConjugateGradient(self._cg_encoding, b, x=self.img, P=P, max_iter=max_iter, tol=tol)
         super().__init__(alg, show_pbar=show_pbar, leave_pbar=leave_pbar)
     
