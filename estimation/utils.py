@@ -4,16 +4,17 @@ from math import ceil
 from .factors import calc_factors, generate_transform_grids
 from .transforms import RigidTransform
 
-#TODO include translations parameters as well
-def generate_transforms(num_shots, rotations, random=False):
+def generate_transforms(num_shots, translations, rotations, random=False):
     transforms = np.zeros((num_shots, 6), dtype=float)
-    for axis, degree in enumerate(rotations):
-        if (degree == 0):
-            continue
+    for axis, (tr_unit, degree) in enumerate(zip(translations, rotations)):
         if random:
-            rads = (np.random.rand(num_shots) - 0.5) * degree * np.pi / 180
+            trans = (np.random.rand(num_shots) - 0.5) * tr_unit
+            rads  = (np.random.rand(num_shots) - 0.5) * degree * np.pi / 180
         else:
-            rads = np.linspace(-0.5, 0.5, num_shots, endpoint=True) * degree * np.pi / 180
+            norm_range = np.linspace(-0.5, 0.5, num_shots, endpoint=True)
+            trans = norm_range * tr_unit
+            rads  = norm_range * degree * np.pi / 180
+        transforms[:, axis]   = trans
         transforms[:, axis+3] = rads
     return transforms - np.mean(transforms, axis=0)
 

@@ -64,11 +64,13 @@ class MotionCorruptedImageRecon(sp.app.App):
         
         if self.save_objective_values:
             self.objective_values = [self.objective()]
-
+        
+        self.t_iterations = [self.transforms.get()]
         alg = JointMin(self._minX, self._minT, self.img, self.transforms, max_iter=max_joint_iter, tol=tol)
         super().__init__(alg)
     
     def _summarize(self):
+        self.t_iterations.append(self.transforms.get())
         if self.save_objective_values:
             self.objective_values.append(self.objective())
 
@@ -85,7 +87,7 @@ class MotionCorruptedImageRecon(sp.app.App):
                 )
 
     def _output(self):
-        return self.alg.x, self.alg.t
+        return self.alg.x, self.alg.t, np.array(self.objective_values), np.stack(self.t_iterations, axis=-1)
     
     def _post_update(self):
         #Tempory implementation for outputting estimatations each iteration
