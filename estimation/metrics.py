@@ -15,4 +15,4 @@ def objective_one_shot(img, ksp, mps, mask, transform, kgrid, rkgrid):
     resid  = (mask * sp.fft(mps[:, None] * (T * img), axes=[-3,-2,-1])) 
     resid -= (mask * ksp[:, None])
     xp = sp.get_array_module(img)
-    return (xp.sum(xp.abs(resid)**2) / xp.size(ksp)).item()
+    return (xp.sum(xp.abs(resid)**2) / xp.size(ksp))

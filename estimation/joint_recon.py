@@ -4,6 +4,7 @@ from .transform_solver import LevenbergMarquardt
 from .image_solver import ImageEstimation
 from .metrics import objective_all_shot
 import numpy as np
+from .encoding import Encoding
 
 
 class MotionCorruptedImageRecon(sp.app.App):
@@ -109,7 +110,10 @@ class MotionCorruptedImageRecon(sp.app.App):
             print('-' * 80)
     
     def objective(self):
-        return objective_all_shot(self.img, self.kspace, self.mps, self.mask, self.transforms, self.kgrid, self.rkgrid)
+        obj = objective_all_shot(self.img, self.kspace, self.mps, self.mask, self.transforms, self.kgrid, self.rkgrid)
+        if self.comm is not None:
+            self.comm.allreduce(obj)
+        return obj.item()
     
     def _minX(self):
         ImageEstimation(
