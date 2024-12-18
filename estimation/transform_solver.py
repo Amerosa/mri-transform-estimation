@@ -3,7 +3,7 @@ from .factors import calc_factors, calc_derivative_factors
 from .transforms import RigidTransform, GradRigidTransform
 
 class LevenbergMarquardt(sp.alg.Alg):
-    def __init__(self, mps, masks, transforms, image, kspace, kgrid, kkgrid, rgrid, rkgrid, winic, constraint, max_iter, shot_batch_size=1):
+    def __init__(self, mps, masks, transforms, image, kspace, kgrid, kkgrid, rgrid, rkgrid, winic, constraint, max_iter, shot_batch_size=1, comm=None):
         self.mps = mps
         self.masks = masks
         self.transforms = transforms
@@ -20,16 +20,15 @@ class LevenbergMarquardt(sp.alg.Alg):
         self.decreasing_err = False
         self.shot_batch_size = shot_batch_size
         self.num_shots = len(transforms)
-
+        self.comm = comm
         super().__init__(max_iter)
     
     def _update(self):
         xp = self.device.xp
         with self.device:
-            batch_iter = -(self.num_shots//-self.shot_batch_size)
-
-            for batch_idx in range(batch_iter):
-                shot_idx = slice(batch_idx * self.shot_batch_size, (batch_idx+1) * self.shot_batch_size)
+            for s in range(self.num_shots):
+                #keeps the dimension proper so we get [1,6] instead of [6] when indexing transforms
+                shot_idx = slice(s, s+1) 
 
                 factors_trans, factors_tan, factors_sin = calc_factors(self.transforms[shot_idx], self.kgrid, self.rkgrid)
                 grad_factors, _ = calc_derivative_factors(self.transforms[shot_idx], self.kgrid, self.kkgrid, self.rkgrid, factors_trans, factors_tan, factors_sin)
@@ -42,54 +41,56 @@ class LevenbergMarquardt(sp.alg.Alg):
                 diff = (E * self.img) - (self.masks[shot_idx] * self.kspace[:, xp.newaxis]) 
                 energy_prev = xp.sum(xp.real(diff * diff.conj()), axis=(0,2,3,4))
 
-                gradient = xp.zeros((self.shot_batch_size, 6))
-                jacobians = []
+                gradient = []
+                partials = []
                 for p_idx in range(6):
                     GT = GradRigidTransform(p_idx, self.img_shape, factors_trans, factors_tan, factors_sin, grad_factors)
-                    jacobians.append(A * F * S * GT * self.img)
-                    gradient[:, p_idx] = xp.sum(xp.real(jacobians[-1] * diff.conj()) , axis=(0,2,3,4))
+                    partials.append(A * F * S * GT * self.img) #[ns, nc, kx, ky, kz]
+                    gradient.append(xp.real(partials[-1] * diff.conj()).sum())
+                gradient = xp.array(gradient)
 
                 #Now we want to estiamte the hessian with our partial transfomrs which is just J.T*J 
-                hessian = xp.zeros((self.shot_batch_size, 6, 6))
-                for shot in range(len(hessian)):
-                    for i in range(6):
-                        for j in range(6):
-                            if i == j:
-                                hessian[shot, i, j] = (1+self.winic[shot_idx,i])*xp.sum(xp.real(jacobians[i].conj() * jacobians[j]), axis=(0,2,3,4))
-                            else:
-                                hessian[shot, i, j] = xp.sum(xp.real(jacobians[i].conj() * jacobians[j]), axis=(0,2,3,4))
+                hessian = xp.zeros((6, 6))
+                for i in range(6):
+                    for j in range(i, 6):
+                        if i == j:
+                            hessian[i, j] = self.winic[shot_idx,i] +  xp.real(partials[i].conj() * partials[j]).sum()
+                        else:
+                            val = xp.real(partials[i].conj() * partials[j]).sum()
+                            hessian[i, j] = val
+                            hessian[j, i] = val
                 
-                z_next = xp.zeros((self.shot_batch_size,6))
-                for shot in range(len(z_next)):
-                    delta = (xp.linalg.lstsq(hessian[shot], gradient[shot], rcond=None)[0])[None, :]
-                    delta *= -1 * 1/(self.winic[shot_idx])
-                    z_next[shot] = self.transforms[(batch_idx*self.shot_batch_size)+shot] + delta
 
-                z_next[:, 3:][z_next[:, 3:] < -xp.pi] += 2 * xp.pi
-                z_next[:, 3:][z_next[:, 3:] >  xp.pi] -= 2 * xp.pi
+                delta = -1 * xp.linalg.lstsq(hessian, gradient, rcond=None)[0]
+                z_next = self.transforms[shot_idx] + delta
+
+                z_next[3:][z_next[3:] < -xp.pi] += 2 * xp.pi
+                z_next[3:][z_next[3:] >  xp.pi] -= 2 * xp.pi
 
                 factors_trans, factors_tan, factors_sin = calc_factors(z_next, self.kgrid, self.rkgrid)
                 T = RigidTransform(self.img_shape, factors_trans, factors_tan, factors_sin)
                 E = A * F * S * T
                 diff = (E * self.img) - (self.masks[shot_idx] * self.kspace[:, xp.newaxis])
-                energy_next = xp.sum(xp.real(diff * diff.conj()), axis=(0,2,3,4))
+                energy_next = xp.real(diff * diff.conj()).sum()
 
                 if energy_next < energy_prev:
-                    self.winic[shot_idx, 3:] = xp.maximum(self.winic[shot_idx, 3:]/5, 1e-4)
-                    self.winic[shot_idx, :3] = xp.maximum(self.winic[shot_idx, :3]/10, 1e-4)
-                else:
-                    self.winic[shot_idx, 3:] = xp.minimum(self.winic[shot_idx, 3:]*1.5, 1e16)
-                    self.winic[shot_idx, :3] = xp.minimum(self.winic[shot_idx, :3]*3, 1e16)
+                    self.winic[shot_idx] = xp.maximum(self.winic[shot_idx]/3, 1e-4)
+                    self.transforms[shot_idx] = z_next.copy()
 
-                if (energy_next < energy_prev).any():
-                    self.decreasing_err = True
-                    z_next = xp.where(energy_next < energy_prev, z_next, self.transforms[shot_idx])
-                    sp.copyto(self.transforms[shot_idx], z_next)
                 else:
-                    self.decreasing_err = False           
+                    self.winic[shot_idx] = xp.minimum(self.winic[shot_idx]*1.5, 1e16)
 
-        #Restrict new transform by zero mean shifting
-        mean_transform = xp.mean(self.transforms, axis=0, keepdims=True)
+        #Restrict new transform by zero mean shifting (if distributed need to gather across all nodes for mean)
+        if self.comm is not None:
+            gathered_transforms = self.comm.gatherv(self.transforms)
+            if self.comm.rank == 0:
+                mean_transform = xp.mean(gathered_transforms.reshape(-1, 6), axis=0, keepdims=True)
+            else:
+                mean_transform = xp.empty((1,6))
+            self.comm.bcast(mean_transform)
+        else:
+            mean_transform = xp.mean(self.transforms, axis=0, keepdims=True)
+        
         factors_trans, factors_tan, factors_sin = calc_factors(mean_transform, self.kgrid, self.rkgrid)
         T = RigidTransform(self.img_shape, factors_trans, factors_tan, factors_sin)
         sp.copyto(self.img, xp.squeeze(T * self.img)) #output will have one shot as a lingering dim hence the squeeze
