@@ -18,6 +18,29 @@ def generate_transforms(num_shots, translations, rotations, random=False):
         transforms[:, axis+3] = rads
     return transforms - np.mean(transforms, axis=0)
 
+def generate_laplace_inrage(loc, scale, size, lower, upper):
+    from scipy.stats import laplace
+    samples = []
+    while len(samples) < size:
+        sample = np.random.laplace(loc, scale)
+        if lower <= sample <= upper:
+            samples.append(sample)
+    return np.array(samples)
+
+def jitter_transform(num_shots):
+    transforms = np.zeros((num_shots, 6), dtype=float)
+    
+    #Translations
+    for i in range(3):
+        samples = generate_laplace_inrage(0, 2, 64, -2.5, 2.5)
+        transforms[:, i]  = samples
+    
+    #Rotations
+    for i in range(3, 6):
+        samples = generate_laplace_inrage(0, 2, 64, -i, i) * (np.pi / 180)
+        transforms[:, i] = samples
+    return transforms
+
 #TODO refactor this function for more sample schemes and axis selection
 def generate_sampling_mask(num_shots, img_shape):
     mask = np.zeros((num_shots, *img_shape), dtype=bool)
