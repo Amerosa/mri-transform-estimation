@@ -4,5 +4,8 @@ env/
 .spyproject
 **/*.ipynb_checkpoints
 data/
-
+notebooks/
+slurm_scripts/
+logs/
+.vscode/
 
