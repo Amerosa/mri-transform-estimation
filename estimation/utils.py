@@ -19,7 +19,6 @@ def generate_transforms(num_shots, translations, rotations, random=False):
     return transforms - np.mean(transforms, axis=0)
 
 def generate_laplace_inrage(loc, scale, size, lower, upper):
-    from scipy.stats import laplace
     samples = []
     while len(samples) < size:
         sample = np.random.laplace(loc, scale)
