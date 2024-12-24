@@ -31,12 +31,12 @@ def jitter_transform(num_shots):
     
     #Translations
     for i in range(3):
-        samples = generate_laplace_inrage(0, 2, 64, -2.5, 2.5)
+        samples = generate_laplace_inrage(0, 2, num_shots, -2.5, 2.5)
         transforms[:, i]  = samples
     
     #Rotations
     for i in range(3, 6):
-        samples = generate_laplace_inrage(0, 2, 64, -i, i) * (np.pi / 180)
+        samples = generate_laplace_inrage(0, 2, num_shots, -i, i) * (np.pi / 180)
         transforms[:, i] = samples
     return transforms
 
@@ -70,12 +70,19 @@ def resample(x, subdivisions, axes=None, is_kspace=False):
         return sp.ifft(sp.fft(x, axes=(-3,-2,-1))[*idx], axes=(-3,-2,-1))
     return x[*idx]
 
-def generate_corrupt_kspace(img, mps, mask, transforms):
+def generate_corrupt_kspace(img, mps, mask, transforms, device=sp.cpu_device):
+    from tqdm import tqdm
     num_shots = len(transforms)
-    kgrid, _, _, rkgrid = generate_transform_grids(img.shape)
-    corr_ksp = np.zeros(mps.shape, dtype=np.complex128)
+    kgrid, _, _, rkgrid = generate_transform_grids(img.shape, device=device)
+    corr_ksp = 0
+    transforms = sp.to_device(transforms, device)
+    img = sp.to_device(img, device)
+    pbar = tqdm(total=num_shots, desc='Generated Corrupt Kspace', leave=True)
     for shot_idx in range(num_shots):
         factors_trans, factors_tan, factors_sin = calc_factors(transforms[shot_idx:shot_idx+1], kgrid, rkgrid)
         T = RigidTransform(img.shape, factors_trans, factors_tan, factors_sin)
-        corr_ksp += np.sum(mask[shot_idx] * sp.fft(mps[:, np.newaxis] * (T * img), axes=[-3,-2,-1]), axis=1)
+        corr_ksp += (mask[shot_idx] * sp.fft(mps[:, np.newaxis] * (T * img), axes=[-3,-2,-1])).sum(axis=1)
+        pbar.update()
+    pbar.close()
+    corr_ksp = sp.to_device(corr_ksp)
     return corr_ksp
