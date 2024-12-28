@@ -24,11 +24,12 @@ for experiment in config["experiments"]:
 #SBATCH --time={slurm_config["time"]}
 #SBATCH --gpus-per-node={slurm_config["gpus_per_node"]}
 
-module load StdEnv/2023 scipy-stack/2024a
+module purge
+module load StdEnv/2023 python/3.11.5 scipy-stack/2024a cuda/12.6
 virtualenv --no-download $SLURM_TMPDIR/env
 source $SLURM_TMPDIR/env/bin/activate
 pip install --no-index --upgrade pip
-pip install -r $HOME/requirements.txt
+pip install sigpy pyyaml cupy
 
 python main.py {experiment_name}.yaml
 """
