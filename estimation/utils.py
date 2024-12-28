@@ -43,9 +43,9 @@ def jitter_transform(num_shots):
 #TODO refactor this function for more sample schemes and axis selection
 def generate_sampling_mask(num_shots, img_shape):
     mask = np.zeros((num_shots, *img_shape), dtype=bool)
-    partition_size = img_shape[-1] // num_shots
+    partition_size = img_shape[0] // num_shots
     for shot in range(num_shots):
-        mask[shot, :,:, shot*partition_size:(shot+1)*partition_size] = 1
+        mask[shot, shot*partition_size:(shot+1)*partition_size] = 1
         #mask[shot, :,:, shot::num_shots] = 1 
     return mask
 
