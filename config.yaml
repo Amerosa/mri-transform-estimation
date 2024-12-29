@@ -1,0 +1,71 @@
+experiments:
+  - experiment_name: experiment_4_shots
+    ksp: "/home/ggrossi/scratch/synth/ksp.npy"
+    mps: "/home/ggrossi/scratch/synth/mps.npy"
+    sampling_mask: "/home/ggrossi/scratch/synth/sampling_mask_4_shots.npy"
+    output_dir: "/home/ggrossi/scratch/synth/experiment_4_shots"
+    parameters:
+      level_2_iter: 3000
+      level_1_iter: 500
+      shot_chunk_size: 2
+    slurm:
+      account: def-mchiew
+      mem_per_cpu: 100G 
+      gpus_per_node: 1
+      time: "16:00:00"
+  - experiment_name: experiment_8_shots
+    ksp: "/home/ggrossi/scratch/synth/ksp.npy"
+    mps: "/home/ggrossi/scratch/synth/mps.npy"
+    sampling_mask: "/home/ggrossi/scratch/synth/sampling_mask_8_shots.npy"
+    output_dir: "/home/ggrossi/scratch/synth/experiment_8_shots"
+    parameters:
+      level_2_iter: 3000
+      level_1_iter: 500
+      shot_chunk_size: 2
+    slurm:
+      account: def-mchiew
+      mem_per_cpu: 100G 
+      gpus_per_node: 1
+      time: "16:00:00"
+  - experiment_name: experiment_16_shots
+    ksp: "/home/ggrossi/scratch/synth/ksp.npy"
+    mps: "/home/ggrossi/scratch/synth/mps.npy"
+    sampling_mask: "/home/ggrossi/scratch/synth/sampling_mask_16_shots.npy"
+    output_dir: "/home/ggrossi/scratch/synth/experiment_16_shots"
+    parameters:
+      level_2_iter: 3000
+      level_1_iter: 500
+      shot_chunk_size: 2
+    slurm:
+      account: def-mchiew
+      mem_per_cpu: 100G 
+      gpus_per_node: 1
+      time: "01-00:00:00"
+  - experiment_name: experiment_32_shots
+    ksp: "/home/ggrossi/scratch/synth/ksp.npy"
+    mps: "/home/ggrossi/scratch/synth/mps.npy"
+    sampling_mask: "/home/ggrossi/scratch/synth/sampling_mask_32_shots.npy"
+    output_dir: "/home/ggrossi/scratch/synth/experiment_32_shots"
+    parameters:
+      level_2_iter: 4000
+      level_1_iter: 800
+      shot_chunk_size: 2
+    slurm:
+      account: def-mchiew
+      mem_per_cpu: 100G 
+      gpus_per_node: 1
+      time: "01-16:00:00"
+  - experiment_name: experiment_64_shots
+    ksp: "/home/ggrossi/scratch/synth/ksp.npy"
+    mps: "/home/ggrossi/scratch/synth/mps.npy"
+    sampling_mask: "/home/ggrossi/scratch/synth/sampling_mask_64_shots.npy"
+    output_dir: "/home/ggrossi/scratch/synth/experiment_64_shots"
+    parameters:
+      level_2_iter: 5000
+      level_1_iter: 1000
+      shot_chunk_size: 2
+    slurm:
+      account: def-mchiew
+      mem_per_cpu: 100G 
+      gpus_per_node: 1
+      time: "02-00:00:00"

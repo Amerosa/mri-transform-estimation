@@ -31,7 +31,7 @@ source $SLURM_TMPDIR/env/bin/activate
 pip install --no-index --upgrade pip
 pip install sigpy pyyaml cupy
 
-python main.py {experiment_name}.yaml
+python main.py {slurm_dir}/{experiment_name}.yaml
 """
     
     #Saving the SLURM script
