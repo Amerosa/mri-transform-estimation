@@ -23,7 +23,7 @@ for experiment in config["experiments"]:
 #SBATCH --error={log_dir}/{experiment_name}.err
 #SBATCH --time={slurm_config["time"]}
 #SBATCH --gpus-per-node={slurm_config["gpus_per_node"]}
-#SBATCH --mem={slurm_config["mem"]}
+#SBATCH --mem-per-cpu={slurm_config["mem_per_cpu"]}
 
 module purge
 module load StdEnv/2023 python/3.11.5 scipy-stack/2024a cuda/12.6
