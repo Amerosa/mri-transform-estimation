@@ -13,7 +13,10 @@ class MotionCorruptedImageRecon(sp.app.App):
         kspace, 
         mps, 
         mask,
-        fullres_shape,
+        kgrid,
+        kkgrid,
+        rgrid,
+        rkgrid,
         img=None, 
         transforms=None,
         constraint=None,
@@ -23,7 +26,7 @@ class MotionCorruptedImageRecon(sp.app.App):
         max_joint_iter=100,
         tol=1e-6,
         shot_chunk_size=None,
-        save_objective_values = False,
+        save_objective_values = True,
         device=sp.cpu_device,
         verbose=False,
         comm=None,
@@ -32,7 +35,6 @@ class MotionCorruptedImageRecon(sp.app.App):
         self.kspace = kspace
         self.mps = mps
         self.mask = mask
-        self.fullres_shape = fullres_shape
         self.img = img
         self.transforms = transforms
         self.constraint = constraint
@@ -60,7 +62,12 @@ class MotionCorruptedImageRecon(sp.app.App):
                 self.transforms = sp.to_device(self.transforms, device=device)
 
             self.damp = xp.ones((len(self.mask), 6))
-            self.kgrid, self.kkgrid, self.rgrid, self.rkgrid = generate_transform_grids(self.fullres_shape, self.img.shape, self.device)
+
+            self.kgrid  = kgrid #sp.to_device(kgrid, device=device)
+            self.kkgrid = kkgrid #sp.to_device(kkgrid, device=device)
+            self.rgrid  = rgrid #sp.to_device(rgrid, device=device)
+            self.rkgrid = rkgrid #sp.to_device(rkgrid, device=device)
+
             self.kspace = sp.to_device(self.kspace, device=device)
             self.mps = sp.to_device(self.mps, device=device)
             self.mask = sp.to_device(self.mask, device=device)
